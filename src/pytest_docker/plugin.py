@@ -117,15 +117,25 @@ def str_to_list(arg):
 @attr.s(frozen=True)
 class DockerComposeExecutor:
 
+    _compose_command = attr.ib()
     _compose_files = attr.ib(converter=str_to_list)
     _compose_project_name = attr.ib()
 
     def execute(self, subcommand):
-        command = "docker-compose"
+        command = self._compose_command
         for compose_file in self._compose_files:
             command += ' -f "{}"'.format(compose_file)
         command += ' -p "{}" {}'.format(self._compose_project_name, subcommand)
         return execute(command)
+
+
+@pytest.fixture(scope="session")
+def docker_compose_command():
+    """Docker Compose command to use, it could be either `docker-compose`
+    for Docker Compose v1 or `docker compose` for Docker Compose
+    v2."""
+
+    return "docker-compose"
 
 
 @pytest.fixture(scope="session")
@@ -159,10 +169,13 @@ def docker_cleanup():
 
 @contextlib.contextmanager
 def get_docker_services(
-    docker_compose_file, docker_compose_project_name, docker_cleanup
+    docker_compose_command,
+    docker_compose_file,
+    docker_compose_project_name,
+    docker_cleanup,
 ):
     docker_compose = DockerComposeExecutor(
-        docker_compose_file, docker_compose_project_name
+        docker_compose_command, docker_compose_file, docker_compose_project_name
     )
 
     # Spawn containers.
@@ -177,11 +190,19 @@ def get_docker_services(
 
 
 @pytest.fixture(scope="session")
-def docker_services(docker_compose_file, docker_compose_project_name, docker_cleanup):
+def docker_services(
+    docker_compose_command,
+    docker_compose_file,
+    docker_compose_project_name,
+    docker_cleanup,
+):
     """Start all services from a docker compose file (`docker-compose up`).
     After test are finished, shutdown all services (`docker-compose down`)."""
 
     with get_docker_services(
-        docker_compose_file, docker_compose_project_name, docker_cleanup
+        docker_compose_command,
+        docker_compose_file,
+        docker_compose_project_name,
+        docker_cleanup,
     ) as docker_service:
         yield docker_service
